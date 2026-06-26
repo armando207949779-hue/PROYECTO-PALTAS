@@ -29,6 +29,11 @@ TIPO_CUENTA = "Cuenta RUT"
 # Número de WhatsApp del negocio en formato internacional, sin + ni espacios.
 WHATSAPP_NEGOCIO = "56963596523"
 
+# Google Sheets donde se guardarán los pedidos.
+# La hoja debe estar compartida con el correo client_email del service account.
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1o1zvFzeOsGkDdLQbvEBvMyK6avLiMVMj04Ic0J2bzSw/edit?usp=sharing"
+GOOGLE_SHEET_NAME = "Pedidos"
+
 CORREO_DESTINO = os.getenv("ORDER_NOTIFY_TO", "armando207949779@gmail.com")
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -106,20 +111,101 @@ def guardar_en_estado(**kwargs) -> None:
         st.session_state[clave] = valor
 
 
-def guardar_orden(datos: dict) -> None:
-    existe = ARCHIVO_ORDENES.exists()
-
-    columnas = [
-        "folio", "fecha_registro", "tipo_palta", "kilos", "precio_por_kg",
-        "total_paltas", "modalidad_entrega", "region", "comuna",
-        "poblacion", "calle", "numero", "nombre", "whatsapp", "estado",
+def columnas_pedidos() -> list[str]:
+    return [
+        "folio",
+        "fecha_registro",
+        "tipo_palta",
+        "kilos",
+        "precio_por_kg",
+        "total_paltas",
+        "modalidad_entrega",
+        "region",
+        "comuna",
+        "poblacion",
+        "calle",
+        "numero",
+        "nombre",
+        "whatsapp",
+        "estado",
     ]
+
+
+def guardar_orden_csv(datos: dict) -> None:
+    existe = ARCHIVO_ORDENES.exists()
+    columnas = columnas_pedidos()
 
     with ARCHIVO_ORDENES.open("a", newline="", encoding="utf-8") as archivo:
         writer = csv.DictWriter(archivo, fieldnames=columnas)
         if not existe:
             writer.writeheader()
         writer.writerow(datos)
+
+
+def obtener_worksheet_google_sheets():
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+
+        service_account_info = dict(st.secrets["gcp_service_account"])
+        credentials = Credentials.from_service_account_info(
+            service_account_info,
+            scopes=scopes,
+        )
+
+        client = gspread.authorize(credentials)
+        spreadsheet = client.open_by_url(GOOGLE_SHEET_URL)
+
+        try:
+            worksheet = spreadsheet.worksheet(GOOGLE_SHEET_NAME)
+        except gspread.WorksheetNotFound:
+            worksheet = spreadsheet.add_worksheet(
+                title=GOOGLE_SHEET_NAME,
+                rows=1000,
+                cols=len(columnas_pedidos()),
+            )
+
+        return worksheet, None
+    except Exception as error:
+        return None, str(error)
+
+
+def guardar_orden_google_sheets(datos: dict) -> tuple[bool, str]:
+    worksheet, error = obtener_worksheet_google_sheets()
+
+    if worksheet is None:
+        return False, error or "No se pudo conectar con Google Sheets."
+
+    columnas = columnas_pedidos()
+
+    try:
+        valores_existentes = worksheet.get_all_values()
+
+        if not valores_existentes:
+            worksheet.append_row(columnas)
+
+        fila = [datos.get(columna, "") for columna in columnas]
+        worksheet.append_row(fila, value_input_option="USER_ENTERED")
+
+        return True, "Solicitud guardada en Google Sheets."
+    except Exception as error:
+        return False, str(error)
+
+
+def guardar_orden(datos: dict) -> tuple[bool, str]:
+    google_ok, google_msg = guardar_orden_google_sheets(datos)
+
+    # Respaldo local para no perder pedidos si Google Sheets no está configurado.
+    if not google_ok:
+        guardar_orden_csv(datos)
+        return False, google_msg
+
+    return True, google_msg
 
 
 def crear_cuerpo_correo(datos: dict) -> str:
@@ -674,10 +760,16 @@ elif st.session_state.paso == 4:
                         "estado": "Solicitud recibida",
                     }
 
-                    guardar_orden(datos)
+                    sheets_ok, sheets_mensaje = guardar_orden(datos)
                     correo_ok, mensaje_estado = enviar_correo(datos)
 
                     st.success("Solicitud registrada correctamente.")
+
+                    if sheets_ok:
+                        st.caption("Pedido guardado en Google Sheets.")
+                    else:
+                        st.warning("Pedido guardado como respaldo local, pero Google Sheets aún no está configurado correctamente.")
+                        st.caption(f"Detalle técnico: {sheets_mensaje}")
 
                     whatsapp_url = link_whatsapp_negocio(datos)
                     st.markdown(
