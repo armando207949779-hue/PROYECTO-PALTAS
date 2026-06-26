@@ -689,13 +689,6 @@ elif st.session_state.paso == 4:
                     if correo_ok:
                         st.caption(mensaje_estado)
 
-                    st.text_area(
-                        "Mensaje para copiar si WhatsApp no se abre",
-                        value=mensaje_para_cliente(datos),
-                        height=285,
-                        key="mensaje_whatsapp_final",
-                    )
-
                     st.download_button(
                         "Descargar solicitud",
                         data=crear_cuerpo_correo(datos),
