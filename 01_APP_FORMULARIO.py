@@ -131,6 +131,31 @@ def columnas_pedidos() -> list[str]:
     ]
 
 
+def encabezados_google_sheets() -> list[str]:
+    return [
+        "Folio",
+        "Fecha registro",
+        "Tipo de palta",
+        "Kilos",
+        "Precio por kg",
+        "Total paltas",
+        "Modalidad de entrega",
+        "Región",
+        "Comuna",
+        "Población / sector",
+        "Calle",
+        "Número",
+        "Nombre cliente",
+        "WhatsApp cliente",
+        "Estado",
+    ]
+
+
+def fila_google_sheets(datos: dict) -> list:
+    claves = columnas_pedidos()
+    return [datos.get(clave, "") for clave in claves]
+
+
 def guardar_orden_csv(datos: dict) -> None:
     existe = ARCHIVO_ORDENES.exists()
     columnas = columnas_pedidos()
@@ -146,7 +171,16 @@ def obtener_worksheet_google_sheets():
     try:
         import gspread
         from google.oauth2.service_account import Credentials
+    except ModuleNotFoundError as error:
+        paquete = error.name
+        return None, (
+            f"Falta instalar el paquete '{paquete}'. "
+            "Revisa que el archivo se llame exactamente requirements.txt, "
+            "que esté en la raíz del repositorio y que contenga: streamlit, gspread y google-auth. "
+            "Después haz Reboot app en Streamlit Cloud."
+        )
 
+    try:
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
@@ -167,12 +201,29 @@ def obtener_worksheet_google_sheets():
             worksheet = spreadsheet.add_worksheet(
                 title=GOOGLE_SHEET_NAME,
                 rows=1000,
-                cols=len(columnas_pedidos()),
+                cols=len(encabezados_google_sheets()),
             )
 
         return worksheet, None
     except Exception as error:
         return None, str(error)
+
+
+def asegurar_encabezados_google_sheets(worksheet) -> None:
+    encabezados = encabezados_google_sheets()
+    valores_existentes = worksheet.get_all_values()
+
+    if not valores_existentes:
+        worksheet.append_row(encabezados, value_input_option="USER_ENTERED")
+        return
+
+    primera_fila = valores_existentes[0]
+    primera_fila_limpia = [str(valor).strip() for valor in primera_fila]
+
+    # Si la primera fila no corresponde a los encabezados esperados,
+    # se insertan encabezados arriba para no perder registros existentes.
+    if primera_fila_limpia[: len(encabezados)] != encabezados:
+        worksheet.insert_row(encabezados, index=1, value_input_option="USER_ENTERED")
 
 
 def guardar_orden_google_sheets(datos: dict) -> tuple[bool, str]:
@@ -181,17 +232,9 @@ def guardar_orden_google_sheets(datos: dict) -> tuple[bool, str]:
     if worksheet is None:
         return False, error or "No se pudo conectar con Google Sheets."
 
-    columnas = columnas_pedidos()
-
     try:
-        valores_existentes = worksheet.get_all_values()
-
-        if not valores_existentes:
-            worksheet.append_row(columnas)
-
-        fila = [datos.get(columna, "") for columna in columnas]
-        worksheet.append_row(fila, value_input_option="USER_ENTERED")
-
+        asegurar_encabezados_google_sheets(worksheet)
+        worksheet.append_row(fila_google_sheets(datos), value_input_option="USER_ENTERED")
         return True, "Solicitud guardada en Google Sheets."
     except Exception as error:
         return False, str(error)
@@ -385,6 +428,40 @@ st.markdown(
         padding: 1rem;
         margin: 0.8rem 0;
     }
+    .clean-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        padding: 1rem;
+        margin: 0.8rem 0;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
+    .mini-title {
+        font-size: 0.9rem;
+        color: #166534;
+        font-weight: 900;
+        margin-bottom: 0.35rem;
+    }
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        border-bottom: 1px solid #eef2f7;
+        padding: 0.45rem 0;
+        font-size: 0.96rem;
+    }
+    .summary-row:last-child {
+        border-bottom: 0;
+    }
+    .summary-key {
+        color: #4b5563;
+        font-weight: 700;
+    }
+    .summary-value {
+        color: #111827;
+        text-align: right;
+        font-weight: 800;
+    }
     .total-card {
         background: #ecfdf5;
         border: 1px solid #86efac;
@@ -459,12 +536,20 @@ mostrar_logo_centrado(LOGO_PATH, 112)
 st.markdown(
     """
     <div class="main-title">Solicitud Pedido<br>Paltas</div>
-    <div class="subtitle">Completa tu pedido por pasos. Es rápido y pensado para WhatsApp.</div>
     """,
     unsafe_allow_html=True,
 )
 
-st.markdown(f'<div class="step-pill">Paso {st.session_state.paso} de 4</div>', unsafe_allow_html=True)
+pasos_nombre = {
+    1: "Pedido",
+    2: "Entrega",
+    3: "Contacto",
+    4: "Confirmación",
+}
+st.markdown(
+    f'<div class="step-pill">Paso {st.session_state.paso} de 4 · {pasos_nombre.get(st.session_state.paso, "")}</div>',
+    unsafe_allow_html=True,
+)
 
 
 # ============================================================
@@ -519,19 +604,14 @@ if st.session_state.paso == 1:
 # ============================================================
 
 elif st.session_state.paso == 2:
-    st.subheader("¿Cómo quieres recibirlas?")
+    st.subheader("Entrega")
 
     modalidad_entrega = st.radio(
-        "Elige una opción",
+        "Selecciona una opción",
         [
             "Retiro sin costo",
-            "Envío a domicilio en La Calera, Quillota, La Cruz o Hijuelas",
-            "Otra comuna o región - cotizar envío",
-        ],
-        captions=[
-            "Ideal si puedes retirar en punto acordado.",
-            "Disponible para zona cercana. El despacho se coordina por WhatsApp.",
-            "Opción para pedidos menos frecuentes o al por mayor.",
+            "Despacho zona cercana",
+            "Cotizar otra comuna o región",
         ],
         key="modalidad_entrega_widget",
     )
@@ -543,20 +623,38 @@ elif st.session_state.paso == 2:
     numero = ""
 
     if modalidad_entrega == "Retiro sin costo":
-        st.info("Retiro sin costo de despacho. Coordinaremos el punto por WhatsApp.")
         region = "Valparaíso"
         comuna = st.selectbox(
-            "Localidad de retiro preferida",
+            "Localidad de retiro",
             LOCALIDADES_CERCANAS,
             key="comuna_retiro_widget",
         )
+        st.markdown(
+            """
+            <div class="clean-card">
+                <div class="mini-title">Retiro</div>
+                Sin costo de despacho. El punto exacto se confirma por WhatsApp.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    elif modalidad_entrega == "Envío a domicilio en La Calera, Quillota, La Cruz o Hijuelas":
+    elif modalidad_entrega == "Despacho zona cercana":
         region = "Valparaíso"
         comuna = st.selectbox(
-            "Localidad",
+            "Comuna",
             LOCALIDADES_CERCANAS,
             key="comuna_local_widget",
+        )
+
+        st.markdown(
+            """
+            <div class="clean-card">
+                <div class="mini-title">Dirección de entrega</div>
+                Completa los datos principales para coordinar rápido.
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
         poblacion = st.text_input("Población / sector", placeholder="Ej: Artificio, Boco, Pocochay", key="poblacion_local_widget")
@@ -566,8 +664,9 @@ elif st.session_state.paso == 2:
     else:
         st.markdown(
             """
-            <div class="low-priority">
-            Para otras comunas o regiones, el envío se cotiza aparte. Esta opción está pensada principalmente para pedidos al por mayor.
+            <div class="clean-card">
+                <div class="mini-title">Cotización de envío</div>
+                Para otras comunas o regiones revisaremos disponibilidad y valor de envío.
             </div>
             """,
             unsafe_allow_html=True,
@@ -623,7 +722,6 @@ elif st.session_state.paso == 2:
                 st.rerun()
 
 
-# ============================================================
 # PASO 3: CONTACTO
 # ============================================================
 
@@ -671,7 +769,7 @@ elif st.session_state.paso == 3:
 # ============================================================
 
 elif st.session_state.paso == 4:
-    st.subheader("Transferencia")
+    st.subheader("Revisa tu pedido")
 
     datos_previos_ok = all(
         clave in st.session_state
@@ -696,7 +794,6 @@ elif st.session_state.paso == 4:
 
         st.warning("Faltan datos para terminar la solicitud.")
         st.write("Datos faltantes: **" + ", ".join(faltantes) + "**")
-        st.caption("Esto puede pasar si se actualiza la página, se abre directo el paso final o Streamlit reinicia la sesión.")
 
         if st.button("Completar desde el inicio", key="btn_reiniciar_incompleto"):
             for key in list(st.session_state.keys()):
@@ -704,30 +801,61 @@ elif st.session_state.paso == 4:
             st.session_state.paso = 1
             st.rerun()
     else:
+        total_final = int(st.session_state.total_paltas)
+
         st.markdown(
             f"""
             <div class="total-card">
-                <div class="total-label">Monto sugerido a transferir</div>
-                <div class="total-value">{formato_pesos(int(st.session_state.total_paltas))}</div>
-                <div class="soft-note">Corresponde solo a las paltas. El despacho, si aplica, se coordina aparte.</div>
+                <div class="total-label">Total paltas</div>
+                <div class="total-value">{formato_pesos(total_final)}</div>
+                <div class="soft-note">El despacho, si corresponde, se coordina aparte.</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.write(f"**Titular:** {TITULAR}")
-        st.write(f"**RUT:** {RUT}")
-        st.write(f"**Banco:** {BANCO}")
-        st.write(f"**Tipo de cuenta:** {TIPO_CUENTA}")
+        direccion = ""
+        if st.session_state.get("modalidad_entrega") == "Retiro sin costo":
+            direccion = "Retiro en " + st.session_state.get("comuna", "")
+        else:
+            partes = [
+                st.session_state.get("poblacion", ""),
+                st.session_state.get("calle", ""),
+                st.session_state.get("numero", ""),
+            ]
+            direccion = ", ".join([parte for parte in partes if parte])
 
-        st.markdown("### Resumen")
-        st.write(f"**Pedido:** {st.session_state.kilos} kg de palta {st.session_state.tipo_palta}")
-        st.write(f"**Entrega:** {st.session_state.modalidad_entrega}")
-        st.write(f"**Comuna:** {st.session_state.get('comuna', '')}")
-        st.write(f"**Cliente:** {st.session_state.nombre}")
-        st.write(f"**WhatsApp:** {st.session_state.whatsapp}")
+        st.markdown(
+            f"""
+            <div class="clean-card">
+                <div class="mini-title">Resumen</div>
+                <div class="summary-row"><span class="summary-key">Pedido</span><span class="summary-value">{st.session_state.kilos} kg · {st.session_state.tipo_palta}</span></div>
+                <div class="summary-row"><span class="summary-key">Precio kg</span><span class="summary-value">{formato_pesos(int(st.session_state.precio_kg))}</span></div>
+                <div class="summary-row"><span class="summary-key">Entrega</span><span class="summary-value">{st.session_state.modalidad_entrega}</span></div>
+                <div class="summary-row"><span class="summary-key">Comuna</span><span class="summary-value">{st.session_state.get("comuna", "")}</span></div>
+                <div class="summary-row"><span class="summary-key">Dirección</span><span class="summary-value">{direccion or "Por coordinar"}</span></div>
+                <div class="summary-row"><span class="summary-key">Cliente</span><span class="summary-value">{st.session_state.nombre}</span></div>
+                <div class="summary-row"><span class="summary-key">WhatsApp</span><span class="summary-value">{st.session_state.whatsapp}</span></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        confirmar = st.checkbox("Confirmo y quiero registrar esta solicitud.", key="confirmar_registro_widget")
+        st.markdown(
+            f"""
+            <div class="clean-card">
+                <div class="mini-title">Transferencia</div>
+                <div class="summary-row"><span class="summary-key">Titular</span><span class="summary-value">{TITULAR}</span></div>
+                <div class="summary-row"><span class="summary-key">RUT</span><span class="summary-value">{RUT}</span></div>
+                <div class="summary-row"><span class="summary-key">Banco</span><span class="summary-value">{BANCO}</span></div>
+                <div class="summary-row"><span class="summary-key">Cuenta</span><span class="summary-value">{TIPO_CUENTA}</span></div>
+                <div class="summary-row"><span class="summary-key">Monto</span><span class="summary-value">{formato_pesos(total_final)}</span></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        confirmar = st.checkbox("Confirmo que los datos están correctos.", key="confirmar_registro_widget")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -736,9 +864,9 @@ elif st.session_state.paso == 4:
                 st.rerun()
 
         with col2:
-            if st.button("Registrar", key="btn_registrar"):
+            if st.button("Registrar pedido", key="btn_registrar"):
                 if not confirmar:
-                    st.error("Debes confirmar para registrar la solicitud.")
+                    st.error("Marca la confirmación para registrar el pedido.")
                 else:
                     folio = "PALTA-" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -748,7 +876,7 @@ elif st.session_state.paso == 4:
                         "tipo_palta": st.session_state.tipo_palta,
                         "kilos": st.session_state.kilos,
                         "precio_por_kg": int(st.session_state.precio_kg),
-                        "total_paltas": int(st.session_state.total_paltas),
+                        "total_paltas": total_final,
                         "modalidad_entrega": st.session_state.modalidad_entrega,
                         "region": st.session_state.get("region", ""),
                         "comuna": st.session_state.get("comuna", ""),
@@ -763,12 +891,12 @@ elif st.session_state.paso == 4:
                     sheets_ok, sheets_mensaje = guardar_orden(datos)
                     correo_ok, mensaje_estado = enviar_correo(datos)
 
-                    st.success("Solicitud registrada correctamente.")
+                    st.success("Pedido registrado.")
 
                     if sheets_ok:
-                        st.caption("Pedido guardado en Google Sheets.")
+                        st.caption("Guardado en Google Sheets.")
                     else:
-                        st.warning("Pedido guardado como respaldo local, pero Google Sheets aún no está configurado correctamente.")
+                        st.warning("El pedido quedó como respaldo local. Google Sheets requiere revisión.")
                         st.caption(f"Detalle técnico: {sheets_mensaje}")
 
                     whatsapp_url = link_whatsapp_negocio(datos)
@@ -776,10 +904,6 @@ elif st.session_state.paso == 4:
                         f'<a class="whatsapp-btn" href="{whatsapp_url}" target="_blank">Enviar pedido por WhatsApp</a>',
                         unsafe_allow_html=True,
                     )
-                    st.caption("Toca el botón para enviar la solicitud directamente al WhatsApp del negocio.")
-
-                    if correo_ok:
-                        st.caption(mensaje_estado)
 
                     st.download_button(
                         "Descargar solicitud",
@@ -789,7 +913,7 @@ elif st.session_state.paso == 4:
                         key="descargar_solicitud_final",
                     )
 
-                    if st.button("Crear nueva solicitud", key="btn_nueva_solicitud"):
+                    if st.button("Nuevo pedido", key="btn_nueva_solicitud"):
                         for key in list(st.session_state.keys()):
                             del st.session_state[key]
                         st.session_state.paso = 1
