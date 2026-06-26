@@ -5,6 +5,7 @@ import smtplib
 from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
+from urllib.parse import quote
 
 import streamlit as st
 
@@ -24,6 +25,9 @@ TITULAR = "Enrique Armando Brun Urrutia"
 RUT = "20.794.977-9"
 BANCO = "Banco Estado"
 TIPO_CUENTA = "Cuenta RUT"
+
+# Número de WhatsApp del negocio en formato internacional, sin + ni espacios.
+WHATSAPP_NEGOCIO = "56963596523"
 
 CORREO_DESTINO = os.getenv("ORDER_NOTIFY_TO", "armando207949779@gmail.com")
 
@@ -205,6 +209,34 @@ Importante: el monto corresponde a paltas. Si corresponde despacho, se coordina 
 Cuando transfieras, envíanos el comprobante por WhatsApp."""
 
 
+def link_whatsapp_negocio(datos: dict) -> str:
+    mensaje = f"""Nueva solicitud de pedido de paltas.
+
+Pedido:
+• Tipo: {datos["tipo_palta"]}
+• Cantidad: {datos["kilos"]} kg
+• Precio por kg: {formato_pesos(datos["precio_por_kg"])}
+• Total paltas: {formato_pesos(datos["total_paltas"])}
+
+Entrega:
+• Modalidad: {datos["modalidad_entrega"]}
+• Región: {datos["region"] or "No aplica"}
+• Comuna: {datos["comuna"] or "No aplica"}
+• Población / sector: {datos["poblacion"] or "No informado"}
+• Calle: {datos["calle"] or "No informado"}
+• Número: {datos["numero"] or "No informado"}
+
+Contacto:
+• Nombre: {datos["nombre"]}
+• WhatsApp: {datos["whatsapp"]}
+
+Folio: {datos["folio"]}
+
+Quiero coordinar la entrega."""
+    return f"https://wa.me/{WHATSAPP_NEGOCIO}?text={quote(mensaje)}"
+
+
+
 # ============================================================
 # CONFIGURACIÓN VISUAL
 # ============================================================
@@ -305,6 +337,18 @@ st.markdown(
         min-height: 3rem;
         border-radius: 14px;
         font-weight: 850;
+    }
+    .whatsapp-btn {
+        display: block;
+        width: 100%;
+        text-align: center;
+        background: #16a34a;
+        color: white !important;
+        padding: 0.9rem 1rem;
+        border-radius: 14px;
+        font-weight: 900;
+        text-decoration: none !important;
+        margin: 0.8rem 0 0.8rem 0;
     }
     div[data-baseweb="select"] > div {
         min-height: 3rem;
@@ -634,10 +678,19 @@ elif st.session_state.paso == 4:
                     correo_ok, mensaje_estado = enviar_correo(datos)
 
                     st.success("Solicitud registrada correctamente.")
-                    st.caption(mensaje_estado)
+
+                    whatsapp_url = link_whatsapp_negocio(datos)
+                    st.markdown(
+                        f'<a class="whatsapp-btn" href="{whatsapp_url}" target="_blank">Enviar pedido por WhatsApp</a>',
+                        unsafe_allow_html=True,
+                    )
+                    st.caption("Toca el botón para enviar la solicitud directamente al WhatsApp del negocio.")
+
+                    if correo_ok:
+                        st.caption(mensaje_estado)
 
                     st.text_area(
-                        "Mensaje para WhatsApp",
+                        "Mensaje para copiar si WhatsApp no se abre",
                         value=mensaje_para_cliente(datos),
                         height=285,
                         key="mensaje_whatsapp_final",
