@@ -1,5 +1,6 @@
 import os
 import csv
+import base64
 import smtplib
 from datetime import datetime
 from email.message import EmailMessage
@@ -9,27 +10,19 @@ import streamlit as st
 
 
 # ============================================================
-# CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN DEL NEGOCIO
 # ============================================================
 
-# Deja el precio fijo en el código.
-# Cambia este valor cuando quieras actualizar el precio por kilo.
 PRECIO_POR_KG = 2500
-
-# Pedido mínimo sugerido.
 KILOS_MINIMOS = 1.0
 
-# Datos de transferencia.
 TITULAR = "Enrique Armando Brun Urrutia"
 RUT = "20.794.977-9"
 BANCO = "Banco Estado"
 TIPO_CUENTA = "Cuenta RUT"
 
-# Correo donde quieres recibir aviso del pedido.
 CORREO_DESTINO = os.getenv("ORDER_NOTIFY_TO", "armando207949779@gmail.com")
 
-# Configuración de correo.
-# Para Gmail usa una clave de aplicación, no tu contraseña normal.
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
@@ -40,113 +33,122 @@ LOGO_PATH = Path("LOGO-PALTA.png")
 
 
 # ============================================================
-# DICCIONARIO REGIONES Y COMUNAS
+# REGIONES Y COMUNAS DE CHILE
+# Fuente referencial: BCN / SUBDERE / MMA
 # ============================================================
 
 REGIONES_COMUNAS = {
     "Arica y Parinacota": [
-        "Arica", "Camarones", "Putre", "General Lagos"
+        "Arica", "Camarones", "General Lagos", "Putre"
     ],
     "Tarapacá": [
-        "Iquique", "Alto Hospicio", "Pozo Almonte", "Camiña", "Colchane",
-        "Huara", "Pica"
+        "Alto Hospicio", "Camiña", "Colchane", "Huara", "Iquique", "Pica",
+        "Pozo Almonte"
     ],
     "Antofagasta": [
-        "Antofagasta", "Mejillones", "Sierra Gorda", "Taltal", "Calama",
-        "Ollagüe", "San Pedro de Atacama", "Tocopilla", "María Elena"
+        "Antofagasta", "Calama", "María Elena", "Mejillones", "Ollagüe",
+        "San Pedro de Atacama", "Sierra Gorda", "Taltal", "Tocopilla"
     ],
     "Atacama": [
-        "Copiapó", "Caldera", "Tierra Amarilla", "Chañaral", "Diego de Almagro",
-        "Vallenar", "Alto del Carmen", "Freirina", "Huasco"
+        "Alto del Carmen", "Caldera", "Chañaral", "Copiapó",
+        "Diego de Almagro", "Freirina", "Huasco", "Tierra Amarilla",
+        "Vallenar"
     ],
     "Coquimbo": [
-        "La Serena", "Coquimbo", "Andacollo", "La Higuera", "Paihuano",
-        "Vicuña", "Illapel", "Canela", "Los Vilos", "Salamanca", "Ovalle",
-        "Combarbalá", "Monte Patria", "Punitaqui", "Río Hurtado"
+        "Andacollo", "Canela", "Combarbalá", "Coquimbo", "Illapel",
+        "La Higuera", "La Serena", "Los Vilos", "Monte Patria", "Ovalle",
+        "Paihuano", "Punitaqui", "Río Hurtado", "Salamanca", "Vicuña"
     ],
     "Valparaíso": [
-        "Valparaíso", "Casablanca", "Concón", "Juan Fernández", "Puchuncaví",
-        "Quintero", "Viña del Mar", "Isla de Pascua", "Los Andes", "Calle Larga",
-        "Rinconada", "San Esteban", "La Ligua", "Cabildo", "Papudo", "Petorca",
-        "Zapallar", "Quillota", "Calera", "Hijuelas", "La Cruz", "Nogales",
-        "San Antonio", "Algarrobo", "Cartagena", "El Quisco", "El Tabo",
-        "Santo Domingo", "San Felipe", "Catemu", "Llaillay", "Panquehue",
-        "Putaendo", "Santa María", "Quilpué", "Limache", "Olmué", "Villa Alemana"
+        "Algarrobo", "Cabildo", "Calle Larga", "Cartagena", "Casablanca",
+        "Catemu", "Concón", "El Quisco", "El Tabo", "Hijuelas",
+        "Isla de Pascua", "Juan Fernández", "La Calera", "La Cruz",
+        "La Ligua", "Limache", "Llaillay", "Los Andes", "Nogales", "Olmué",
+        "Panquehue", "Papudo", "Petorca", "Puchuncaví", "Putaendo",
+        "Quillota", "Quilpué", "Quintero", "Rinconada", "San Antonio",
+        "San Esteban", "San Felipe", "Santa María", "Santo Domingo",
+        "Valparaíso", "Villa Alemana", "Viña del Mar", "Zapallar"
     ],
     "Metropolitana de Santiago": [
-        "Cerrillos", "Cerro Navia", "Conchalí", "El Bosque", "Estación Central",
-        "Huechuraba", "Independencia", "La Cisterna", "La Florida", "La Granja",
-        "La Pintana", "La Reina", "Las Condes", "Lo Barnechea", "Lo Espejo",
-        "Lo Prado", "Macul", "Maipú", "Ñuñoa", "Pedro Aguirre Cerda",
-        "Peñalolén", "Providencia", "Pudahuel", "Quilicura", "Quinta Normal",
-        "Recoleta", "Renca", "San Joaquín", "San Miguel", "San Ramón",
-        "Santiago", "Vitacura", "Puente Alto", "Pirque", "San José de Maipo",
-        "Colina", "Lampa", "Tiltil", "San Bernardo", "Buin", "Calera de Tango",
-        "Paine", "Melipilla", "Alhué", "Curacaví", "María Pinto", "San Pedro",
-        "Talagante", "El Monte", "Isla de Maipo", "Padre Hurtado", "Peñaflor"
+        "Alhué", "Buin", "Calera de Tango", "Cerrillos", "Cerro Navia",
+        "Colina", "Conchalí", "Curacaví", "El Bosque", "El Monte",
+        "Estación Central", "Huechuraba", "Independencia", "Isla de Maipo",
+        "La Cisterna", "La Florida", "La Granja", "La Pintana", "La Reina",
+        "Lampa", "Las Condes", "Lo Barnechea", "Lo Espejo", "Lo Prado",
+        "Macul", "Maipú", "María Pinto", "Melipilla", "Ñuñoa",
+        "Padre Hurtado", "Paine", "Pedro Aguirre Cerda", "Peñaflor",
+        "Peñalolén", "Pirque", "Providencia", "Pudahuel", "Puente Alto",
+        "Quilicura", "Quinta Normal", "Recoleta", "Renca", "San Bernardo",
+        "San Joaquín", "San José de Maipo", "San Miguel", "San Pedro",
+        "San Ramón", "Santiago", "Talagante", "Tiltil", "Vitacura"
     ],
     "O'Higgins": [
-        "Rancagua", "Codegua", "Coinco", "Coltauco", "Doñihue", "Graneros",
-        "Las Cabras", "Machalí", "Malloa", "Mostazal", "Olivar", "Peumo",
-        "Pichidegua", "Quinta de Tilcoco", "Rengo", "Requínoa", "San Vicente",
-        "Pichilemu", "La Estrella", "Litueche", "Marchihue", "Navidad",
-        "Paredones", "San Fernando", "Chépica", "Chimbarongo", "Lolol",
-        "Nancagua", "Palmilla", "Peralillo", "Placilla", "Pumanque",
+        "Chépica", "Codegua", "Coinco", "Coltauco", "Doñihue", "Graneros",
+        "La Estrella", "Las Cabras", "Litueche", "Lolol", "Machalí",
+        "Malloa", "Marchihue", "Mostazal", "Nancagua", "Navidad", "Olivar",
+        "Palmilla", "Paredones", "Peralillo", "Peumo", "Pichidegua",
+        "Pichilemu", "Placilla", "Pumanque", "Quinta de Tilcoco",
+        "Rancagua", "Rengo", "Requínoa", "San Fernando", "San Vicente",
         "Santa Cruz"
     ],
     "Maule": [
-        "Talca", "Constitución", "Curepto", "Empedrado", "Maule", "Pelarco",
-        "Pencahue", "Río Claro", "San Clemente", "San Rafael", "Cauquenes",
-        "Chanco", "Pelluhue", "Curicó", "Hualañé", "Licantén", "Molina",
-        "Rauco", "Romeral", "Sagrada Familia", "Teno", "Vichuquén", "Linares",
-        "Colbún", "Longaví", "Parral", "Retiro", "San Javier", "Villa Alegre",
-        "Yerbas Buenas"
+        "Cauquenes", "Chanco", "Colbún", "Constitución", "Curepto",
+        "Curicó", "Empedrado", "Hualañé", "Licantén", "Linares", "Longaví",
+        "Maule", "Molina", "Parral", "Pelarco", "Pelluhue", "Pencahue",
+        "Rauco", "Retiro", "Río Claro", "Romeral", "Sagrada Familia",
+        "San Clemente", "San Javier", "San Rafael", "Talca", "Teno",
+        "Vichuquén", "Villa Alegre", "Yerbas Buenas"
     ],
     "Ñuble": [
-        "Chillán", "Bulnes", "Chillán Viejo", "El Carmen", "Pemuco", "Pinto",
-        "Quillón", "San Ignacio", "Yungay", "Quirihue", "Cobquecura", "Coelemu",
-        "Ninhue", "Portezuelo", "Ránquil", "Treguaco", "San Carlos", "Coihueco",
-        "Ñiquén", "San Fabián", "San Nicolás"
+        "Bulnes", "Chillán", "Chillán Viejo", "Cobquecura", "Coelemu",
+        "Coihueco", "El Carmen", "Ninhue", "Ñiquén", "Pemuco", "Pinto",
+        "Portezuelo", "Quillón", "Quirihue", "Ránquil", "San Carlos",
+        "San Fabián", "San Ignacio", "San Nicolás", "Treguaco", "Yungay"
     ],
     "Biobío": [
-        "Concepción", "Coronel", "Chiguayante", "Florida", "Hualqui", "Lota",
-        "Penco", "San Pedro de la Paz", "Santa Juana", "Talcahuano", "Tomé",
-        "Hualpén", "Lebu", "Arauco", "Cañete", "Contulmo", "Curanilahue",
-        "Los Álamos", "Tirúa", "Los Ángeles", "Antuco", "Cabrero", "Laja",
-        "Mulchén", "Nacimiento", "Negrete", "Quilaco", "Quilleco",
-        "San Rosendo", "Santa Bárbara", "Tucapel", "Yumbel", "Alto Biobío"
+        "Alto Biobío", "Antuco", "Arauco", "Cabrero", "Cañete",
+        "Chiguayante", "Concepción", "Contulmo", "Coronel", "Curanilahue",
+        "Florida", "Hualpén", "Hualqui", "Laja", "Lebu", "Los Álamos",
+        "Los Ángeles", "Lota", "Mulchén", "Nacimiento", "Negrete", "Penco",
+        "Quilaco", "Quilleco", "San Pedro de la Paz", "San Rosendo",
+        "Santa Bárbara", "Santa Juana", "Talcahuano", "Tirúa", "Tomé",
+        "Tucapel", "Yumbel"
     ],
     "La Araucanía": [
-        "Temuco", "Carahue", "Cunco", "Curarrehue", "Freire", "Galvarino",
-        "Gorbea", "Lautaro", "Loncoche", "Melipeuco", "Nueva Imperial",
-        "Padre Las Casas", "Perquenco", "Pitrufquén", "Pucón", "Saavedra",
-        "Teodoro Schmidt", "Toltén", "Vilcún", "Villarrica", "Cholchol",
-        "Angol", "Collipulli", "Curacautín", "Ercilla", "Lonquimay",
-        "Los Sauces", "Lumaco", "Purén", "Renaico", "Traiguén", "Victoria"
+        "Angol", "Carahue", "Cholchol", "Collipulli", "Cunco",
+        "Curacautín", "Curarrehue", "Ercilla", "Freire", "Galvarino",
+        "Gorbea", "Lautaro", "Loncoche", "Lonquimay", "Los Sauces",
+        "Lumaco", "Melipeuco", "Nueva Imperial", "Padre Las Casas",
+        "Perquenco", "Pitrufquén", "Pucón", "Purén", "Renaico", "Saavedra",
+        "Temuco", "Teodoro Schmidt", "Toltén", "Traiguén", "Victoria",
+        "Vilcún", "Villarrica"
     ],
     "Los Ríos": [
-        "Valdivia", "Corral", "Lanco", "Los Lagos", "Máfil", "Mariquina",
-        "Paillaco", "Panguipulli", "La Unión", "Futrono", "Lago Ranco",
-        "Río Bueno"
+        "Corral", "Futrono", "La Unión", "Lago Ranco", "Lanco", "Los Lagos",
+        "Máfil", "Mariquina", "Paillaco", "Panguipulli", "Río Bueno",
+        "Valdivia"
     ],
     "Los Lagos": [
-        "Puerto Montt", "Calbuco", "Cochamó", "Fresia", "Frutillar",
-        "Los Muermos", "Llanquihue", "Maullín", "Puerto Varas", "Castro",
-        "Ancud", "Chonchi", "Curaco de Vélez", "Dalcahue", "Puqueldón",
-        "Queilén", "Quellón", "Quemchi", "Quinchao", "Osorno", "Puerto Octay",
-        "Purranque", "Puyehue", "Río Negro", "San Juan de la Costa",
-        "San Pablo", "Chaitén", "Futaleufú", "Hualaihué", "Palena"
+        "Ancud", "Calbuco", "Castro", "Chaitén", "Chonchi", "Cochamó",
+        "Curaco de Vélez", "Dalcahue", "Fresia", "Frutillar", "Futaleufú",
+        "Hualaihué", "Llanquihue", "Los Muermos", "Maullín", "Osorno",
+        "Palena", "Puerto Montt", "Puerto Octay", "Puerto Varas", "Puqueldón",
+        "Purranque", "Puyehue", "Queilén", "Quellón", "Quemchi", "Quinchao",
+        "Río Negro", "San Juan de la Costa", "San Pablo"
     ],
     "Aysén": [
-        "Coyhaique", "Lago Verde", "Aysén", "Cisnes", "Guaitecas",
-        "Cochrane", "O'Higgins", "Tortel", "Chile Chico", "Río Ibáñez"
+        "Aysén", "Chile Chico", "Cisnes", "Cochrane", "Coyhaique",
+        "Guaitecas", "Lago Verde", "O'Higgins", "Río Ibáñez", "Tortel"
     ],
     "Magallanes": [
-        "Punta Arenas", "Laguna Blanca", "Río Verde", "San Gregorio",
-        "Cabo de Hornos", "Antártica", "Porvenir", "Primavera", "Timaukel",
-        "Natales", "Torres del Paine"
+        "Antártica", "Cabo de Hornos", "Laguna Blanca", "Natales",
+        "Porvenir", "Primavera", "Punta Arenas", "Río Verde", "San Gregorio",
+        "Timaukel", "Torres del Paine"
     ],
 }
+
+COMUNAS_RETIRO_GRATIS = ["Quillota", "La Calera"]
+REGIONES_DESPACHO_A_SOLICITUD = ["Valparaíso", "Metropolitana de Santiago"]
 
 
 # ============================================================
@@ -161,6 +163,56 @@ def calcular_total(kilos: float) -> int:
     return int(round(kilos * PRECIO_POR_KG))
 
 
+def mostrar_logo_centrado(path: Path, ancho_px: int = 112) -> None:
+    if not path.exists():
+        return
+
+    extension = path.suffix.replace(".", "").lower()
+    if extension == "jpg":
+        extension = "jpeg"
+
+    imagen_base64 = base64.b64encode(path.read_bytes()).decode("utf-8")
+    st.markdown(
+        f"""
+        <div class="logo-wrap">
+            <img src="data:image/{extension};base64,{imagen_base64}" width="{ancho_px}" />
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def opciones_entrega(region: str, comuna: str) -> list[str]:
+    opciones = []
+
+    if comuna in COMUNAS_RETIRO_GRATIS:
+        opciones.append("Retiro en Quillota / La Calera - sin costo de despacho")
+
+    if region in REGIONES_DESPACHO_A_SOLICITUD:
+        opciones.append("Despacho a solicitud - Quinta Región / Santiago")
+
+    if region not in REGIONES_DESPACHO_A_SOLICITUD:
+        opciones.append("Cotizar envío a otra región - al por mayor")
+
+    if not opciones:
+        opciones.append("Coordinar por WhatsApp")
+
+    return opciones
+
+
+def nota_entrega(region: str, tipo_entrega: str) -> str:
+    if tipo_entrega.startswith("Retiro"):
+        return "Retiro disponible sin costo de despacho. La coordinación final se realiza por WhatsApp."
+
+    if tipo_entrega.startswith("Despacho"):
+        return "El valor mostrado corresponde solo a paltas. El despacho se coordina y confirma por WhatsApp."
+
+    if tipo_entrega.startswith("Cotizar"):
+        return "Para otras regiones se cotiza envío al por mayor. El formulario deja registrada la solicitud."
+
+    return "La entrega se coordina después por WhatsApp."
+
+
 def guardar_orden(datos: dict) -> None:
     existe = ARCHIVO_ORDENES.exists()
 
@@ -172,10 +224,11 @@ def guardar_orden(datos: dict) -> None:
         "correo",
         "region",
         "comuna",
+        "tipo_entrega",
         "direccion_referencia",
         "kilos",
         "precio_por_kg",
-        "total",
+        "total_paltas",
         "fecha_preferida",
         "comentarios",
         "estado",
@@ -200,15 +253,16 @@ Nombre: {datos["nombre"]}
 WhatsApp: {datos["whatsapp"]}
 Correo: {datos["correo"] or "No informado"}
 
-UBICACIÓN
+UBICACIÓN Y ENTREGA
 Región: {datos["region"]}
 Comuna: {datos["comuna"]}
+Modalidad: {datos["tipo_entrega"]}
 Dirección o referencia: {datos["direccion_referencia"] or "No informado"}
 
 PEDIDO
 Kilos solicitados: {datos["kilos"]} kg
 Precio por kg: {formato_pesos(PRECIO_POR_KG)}
-Total paltas: {formato_pesos(datos["total"])}
+Total paltas: {formato_pesos(datos["total_paltas"])}
 Fecha preferida: {datos["fecha_preferida"] or "No informada"}
 
 COMENTARIOS
@@ -219,7 +273,11 @@ Titular: {TITULAR}
 RUT: {RUT}
 Banco: {BANCO}
 Tipo de cuenta: {TIPO_CUENTA}
-Monto: {formato_pesos(datos["total"])}
+Monto sugerido: {formato_pesos(datos["total_paltas"])}
+
+IMPORTANTE
+El monto mostrado corresponde a paltas.
+Si corresponde despacho, se coordina o cotiza aparte según la zona.
 
 Estado interno: {datos["estado"]}
 Fecha registro: {datos["fecha_registro"]}
@@ -228,10 +286,10 @@ Fecha registro: {datos["fecha_registro"]}
 
 def enviar_correo(datos: dict) -> tuple[bool, str]:
     if not SMTP_USER or not SMTP_PASSWORD:
-        return False, "Pedido guardado. Correo no enviado porque falta configurar SMTP_USER y SMTP_PASSWORD."
+        return False, "Solicitud guardada. Correo no enviado porque falta configurar SMTP_USER y SMTP_PASSWORD."
 
     mensaje = EmailMessage()
-    mensaje["Subject"] = f"Solicitud paltas {datos['folio']} - {datos['nombre']} - {formato_pesos(datos['total'])}"
+    mensaje["Subject"] = f"Solicitud paltas {datos['folio']} - {datos['nombre']} - {formato_pesos(datos['total_paltas'])}"
     mensaje["From"] = SMTP_USER
     mensaje["To"] = CORREO_DESTINO
     mensaje.set_content(crear_cuerpo_correo(datos))
@@ -241,9 +299,9 @@ def enviar_correo(datos: dict) -> tuple[bool, str]:
             smtp.starttls()
             smtp.login(SMTP_USER, SMTP_PASSWORD)
             smtp.send_message(mensaje)
-        return True, "Pedido guardado y correo enviado."
+        return True, "Solicitud guardada y correo enviado."
     except Exception as error:
-        return False, f"Pedido guardado. No se pudo enviar el correo: {error}"
+        return False, f"Solicitud guardada. No se pudo enviar el correo: {error}"
 
 
 def mensaje_para_cliente(datos: dict) -> str:
@@ -252,175 +310,238 @@ def mensaje_para_cliente(datos: dict) -> str:
 Resumen:
 • Cantidad: {datos["kilos"]} kg
 • Precio por kg: {formato_pesos(PRECIO_POR_KG)}
-• Total a transferir: {formato_pesos(datos["total"])}
+• Total paltas: {formato_pesos(datos["total_paltas"])}
+
+Entrega:
+• Región: {datos["region"]}
+• Comuna: {datos["comuna"]}
+• Modalidad: {datos["tipo_entrega"]}
 
 Datos de transferencia:
 • Titular: {TITULAR}
 • RUT: {RUT}
 • Banco: {BANCO}
 • Tipo de cuenta: {TIPO_CUENTA}
-• Monto: {formato_pesos(datos["total"])}
+• Monto sugerido: {formato_pesos(datos["total_paltas"])}
 
-Ubicación informada:
-• Región: {datos["region"]}
-• Comuna: {datos["comuna"]}
+Importante:
+El monto corresponde a paltas. Si corresponde despacho, se coordina o cotiza aparte.
 
 Cuando transfieras, envíanos el comprobante por WhatsApp.
-Luego coordinamos la logística y entrega."""
+Luego coordinamos la logística final."""
 
 
 # ============================================================
-# INTERFAZ
+# INTERFAZ OPTIMIZADA PARA TELÉFONO
 # ============================================================
 
 st.set_page_config(
     page_title="Solicitud Pedido Paltas",
     page_icon="🥑",
     layout="centered",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown(
     """
     <style>
     .block-container {
-        max-width: 760px;
-        padding-top: 1.5rem;
+        max-width: 560px;
+        padding-top: 0.75rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
         padding-bottom: 2rem;
     }
-    .logo-box {
+    .logo-wrap {
         display: flex;
         justify-content: center;
-        margin-bottom: 0.4rem;
+        align-items: center;
+        margin-top: 0.15rem;
+        margin-bottom: 0.25rem;
     }
-    .titulo-principal {
+    .title-mobile {
         text-align: center;
-        font-size: 2.1rem;
-        font-weight: 800;
-        line-height: 1.05;
-        margin-bottom: 0.2rem;
-    }
-    .subtitulo {
-        text-align: center;
-        color: #4b5563;
-        font-size: 1rem;
-        margin-bottom: 1.3rem;
-    }
-    .precio-box {
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        border-radius: 14px;
-        padding: 14px 16px;
-        margin-bottom: 16px;
-        text-align: center;
-    }
-    .precio-grande {
-        font-size: 1.4rem;
-        font-weight: 800;
-        color: #166534;
-    }
-    .total-box {
-        background: #ecfdf5;
-        border: 1px solid #86efac;
-        border-radius: 16px;
-        padding: 18px;
-        margin-top: 8px;
-        margin-bottom: 12px;
-        text-align: center;
-    }
-    .total-numero {
-        font-size: 2rem;
+        font-size: 1.85rem;
         font-weight: 900;
+        line-height: 1.05;
+        margin: 0.15rem 0 0.25rem 0;
         color: #14532d;
     }
-    .nota {
-        color: #6b7280;
-        font-size: 0.92rem;
+    .subtitle-mobile {
+        text-align: center;
+        color: #4b5563;
+        font-size: 0.96rem;
+        line-height: 1.35;
+        margin-bottom: 1rem;
+    }
+    .quick-card {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 16px;
+        padding: 0.85rem 1rem;
+        margin-bottom: 0.9rem;
+        text-align: center;
+    }
+    .quick-label {
+        color: #166534;
+        font-size: 0.86rem;
+        font-weight: 700;
+    }
+    .quick-value {
+        font-size: 1.5rem;
+        color: #14532d;
+        font-weight: 900;
+    }
+    .total-card {
+        background: #ecfdf5;
+        border: 1px solid #86efac;
+        border-radius: 18px;
+        padding: 1rem;
+        text-align: center;
+        margin: 0.75rem 0 0.75rem 0;
+    }
+    .total-label {
+        color: #166534;
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+    .total-value {
+        color: #14532d;
+        font-size: 2.05rem;
+        font-weight: 950;
+        line-height: 1.1;
+    }
+    .soft-note {
+        color: #4b5563;
+        font-size: 0.88rem;
+        line-height: 1.3;
+        margin-top: 0.35rem;
+    }
+    div[data-testid="stForm"] {
+        border: 0;
+        padding: 0;
+    }
+    div[data-testid="stForm"] label {
+        font-weight: 700;
+    }
+    .stButton button, .stDownloadButton button {
+        width: 100%;
+        border-radius: 14px;
+        min-height: 3rem;
+        font-weight: 800;
+    }
+    div[data-baseweb="select"] > div {
+        border-radius: 12px;
+        min-height: 3rem;
+    }
+    input, textarea {
+        border-radius: 12px !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-if LOGO_PATH.exists():
-    st.markdown('<div class="logo-box">', unsafe_allow_html=True)
-    st.image(str(LOGO_PATH), width=150)
-    st.markdown('</div>', unsafe_allow_html=True)
+mostrar_logo_centrado(LOGO_PATH, ancho_px=118)
 
 st.markdown(
     """
-    <div class="titulo-principal">Solicitud Pedido<br>Paltas</div>
-    <div class="subtitulo">Completa tus datos en menos de un minuto. Luego coordinamos logística y entrega por WhatsApp.</div>
+    <div class="title-mobile">Solicitud Pedido<br>Paltas</div>
+    <div class="subtitle-mobile">
+        Formulario rápido para registrar tu pedido. La logística se coordina después por WhatsApp.
+    </div>
     """,
     unsafe_allow_html=True,
 )
 
 st.markdown(
     f"""
-    <div class="precio-box">
-        <div>Precio actual por kilo</div>
-        <div class="precio-grande">{formato_pesos(PRECIO_POR_KG)}</div>
+    <div class="quick-card">
+        <div class="quick-label">Precio por kilo</div>
+        <div class="quick-value">{formato_pesos(PRECIO_POR_KG)}</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-with st.form("solicitud_paltas", clear_on_submit=False):
-    st.subheader("1. Tus datos")
+with st.form("solicitud_paltas_v3", clear_on_submit=False):
+    st.markdown("### 1. Contacto")
 
-    nombre = st.text_input("Nombre", placeholder="Ej: Juan Pérez")
-    whatsapp = st.text_input("WhatsApp", placeholder="Ej: +56 9 1234 5678")
-    correo = st.text_input("Correo opcional", placeholder="Ej: correo@gmail.com")
+    nombre = st.text_input("Nombre", placeholder="Tu nombre")
+    whatsapp = st.text_input("WhatsApp", placeholder="+56 9 1234 5678")
+    correo = st.text_input("Correo opcional", placeholder="correo@gmail.com")
 
-    st.subheader("2. Ubicación")
+    st.markdown("### 2. Ubicación")
+
+    regiones = list(REGIONES_COMUNAS.keys())
+    region_default = regiones.index("Valparaíso") if "Valparaíso" in regiones else 0
 
     region = st.selectbox(
         "Región",
-        list(REGIONES_COMUNAS.keys()),
-        index=list(REGIONES_COMUNAS.keys()).index("Metropolitana de Santiago"),
+        regiones,
+        index=region_default,
+        key="region_select",
     )
+
+    comunas_disponibles = REGIONES_COMUNAS[region]
 
     comuna = st.selectbox(
         "Comuna",
-        REGIONES_COMUNAS[region],
+        comunas_disponibles,
+        key=f"comuna_select_{region}",
     )
 
-    direccion_referencia = st.text_input(
-        "Dirección o referencia opcional",
-        placeholder="Ej: sector, villa, calle principal, referencia de entrega",
+    opciones = opciones_entrega(region, comuna)
+
+    tipo_entrega = st.radio(
+        "Modalidad",
+        opciones,
+        captions=[nota_entrega(region, opcion) for opcion in opciones],
     )
 
-    st.subheader("3. Pedido")
+    pedir_direccion = tipo_entrega.startswith("Despacho") or tipo_entrega.startswith("Cotizar")
+
+    direccion_referencia = ""
+    if pedir_direccion:
+        direccion_referencia = st.text_input(
+            "Dirección o referencia",
+            placeholder="Calle, sector o referencia para coordinar",
+        )
+
+    st.markdown("### 3. Pedido")
 
     kilos = st.number_input(
-        "Kilos de paltas",
+        "Kilos",
         min_value=KILOS_MINIMOS,
         value=KILOS_MINIMOS,
         step=0.5,
-        help="Puedes ajustar la cantidad en medios kilos.",
     )
 
-    fecha_preferida = st.date_input("Fecha preferida, opcional", value=None)
+    fecha_preferida = st.date_input(
+        "Fecha preferida opcional",
+        value=None,
+    )
 
     comentarios = st.text_area(
         "Comentario opcional",
-        placeholder="Ej: prefiero paltas más maduras, coordinar horario, etc.",
-        height=90,
+        placeholder="Ej: paltas más maduras, horario ideal, pedido mayorista, etc.",
+        height=80,
     )
 
     total = calcular_total(kilos)
 
     st.markdown(
         f"""
-        <div class="total-box">
-            <div>Total a transferir</div>
-            <div class="total-numero">{formato_pesos(total)}</div>
-            <div class="nota">No incluye despacho si aplica. La logística se coordina después.</div>
+        <div class="total-card">
+            <div class="total-label">Total paltas</div>
+            <div class="total-value">{formato_pesos(total)}</div>
+            <div class="soft-note">{nota_entrega(region, tipo_entrega)}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    aceptar = st.checkbox("Confirmo que los datos están correctos.")
+    confirmar = st.checkbox("Confirmo que mis datos están correctos.")
     enviar = st.form_submit_button("Enviar solicitud")
 
 if enviar:
@@ -430,16 +551,16 @@ if enviar:
         errores.append("Nombre")
     if not whatsapp.strip():
         errores.append("WhatsApp")
-    if kilos < KILOS_MINIMOS:
-        errores.append("Kilos")
-
-    if not aceptar:
+    if pedir_direccion and not direccion_referencia.strip():
+        errores.append("Dirección o referencia")
+    if not confirmar:
         errores.append("Confirmación")
 
     if errores:
-        st.error("Revisa estos campos: " + ", ".join(errores))
+        st.error("Falta revisar: " + ", ".join(errores))
     else:
         folio = "PALTA-" + datetime.now().strftime("%Y%m%d-%H%M%S")
+
         datos = {
             "folio": folio,
             "fecha_registro": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -448,10 +569,11 @@ if enviar:
             "correo": correo.strip(),
             "region": region,
             "comuna": comuna,
+            "tipo_entrega": tipo_entrega,
             "direccion_referencia": direccion_referencia.strip(),
             "kilos": kilos,
             "precio_por_kg": PRECIO_POR_KG,
-            "total": total,
+            "total_paltas": total,
             "fecha_preferida": str(fecha_preferida) if fecha_preferida else "",
             "comentarios": comentarios.strip(),
             "estado": "Solicitud recibida",
@@ -460,40 +582,38 @@ if enviar:
         guardar_orden(datos)
         correo_ok, mensaje_estado = enviar_correo(datos)
 
-        st.success("Solicitud enviada correctamente.")
+        st.success("Solicitud enviada.")
         st.caption(mensaje_estado)
 
-        st.subheader("Datos de transferencia")
+        st.markdown("### Transferencia")
         st.write(f"**Titular:** {TITULAR}")
         st.write(f"**RUT:** {RUT}")
         st.write(f"**Banco:** {BANCO}")
         st.write(f"**Tipo de cuenta:** {TIPO_CUENTA}")
-        st.write(f"**Monto:** {formato_pesos(total)}")
+        st.write(f"**Monto sugerido:** {formato_pesos(total)}")
 
-        st.subheader("Mensaje para WhatsApp")
+        st.markdown("### Mensaje WhatsApp")
         st.text_area(
-            "Copia y pega este mensaje al cliente",
+            "Copia este mensaje para el cliente",
             value=mensaje_para_cliente(datos),
-            height=280,
+            height=300,
         )
 
         st.download_button(
-            "Descargar esta solicitud",
+            "Descargar solicitud",
             data=crear_cuerpo_correo(datos),
             file_name=f"{folio}.txt",
             mime="text/plain",
         )
 
-st.divider()
-
-with st.expander("Ver registro interno"):
+with st.expander("Registro interno"):
     if ARCHIVO_ORDENES.exists():
         with ARCHIVO_ORDENES.open("rb") as archivo:
             st.download_button(
-                "Descargar todas las solicitudes CSV",
+                "Descargar solicitudes CSV",
                 data=archivo,
                 file_name="ordenes_paltas.csv",
                 mime="text/csv",
             )
     else:
-        st.caption("Todavía no hay solicitudes registradas.")
+        st.caption("Aún no hay solicitudes registradas.")
