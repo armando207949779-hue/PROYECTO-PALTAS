@@ -348,7 +348,7 @@ if st.session_state.paso == 1:
         "Tipo de palta",
         list(PRECIOS_PALTA.keys()),
         horizontal=True,
-        key="tipo_palta",
+        key="tipo_palta_widget",
     )
 
     kilos = st.number_input(
@@ -356,7 +356,7 @@ if st.session_state.paso == 1:
         min_value=KILOS_MINIMOS,
         value=float(st.session_state.get("kilos", KILOS_MINIMOS)),
         step=0.5,
-        key="kilos_input",
+        key="kilos_widget",
     )
 
     precio_kg = PRECIOS_PALTA[tipo_palta]
@@ -373,7 +373,7 @@ if st.session_state.paso == 1:
         unsafe_allow_html=True,
     )
 
-    if st.button("Continuar"):
+    if st.button("Continuar", key="btn_paso1"):
         guardar_en_estado(
             tipo_palta=tipo_palta,
             kilos=kilos,
@@ -403,7 +403,7 @@ elif st.session_state.paso == 2:
             "Disponible para zona cercana. El despacho se coordina por WhatsApp.",
             "Opción para pedidos menos frecuentes o al por mayor.",
         ],
-        key="modalidad_entrega",
+        key="modalidad_entrega_widget",
     )
 
     region = ""
@@ -418,7 +418,7 @@ elif st.session_state.paso == 2:
         comuna = st.selectbox(
             "Localidad de retiro preferida",
             LOCALIDADES_CERCANAS,
-            key="comuna_retiro",
+            key="comuna_retiro_widget",
         )
 
     elif modalidad_entrega == "Envío a domicilio en La Calera, Quillota, La Cruz o Hijuelas":
@@ -426,12 +426,12 @@ elif st.session_state.paso == 2:
         comuna = st.selectbox(
             "Localidad",
             LOCALIDADES_CERCANAS,
-            key="comuna_local",
+            key="comuna_local_widget",
         )
 
-        poblacion = st.text_input("Población / sector", placeholder="Ej: Artificio, Boco, Pocochay", key="poblacion_local")
-        calle = st.text_input("Calle", placeholder="Ej: Los Aromos", key="calle_local")
-        numero = st.text_input("Número", placeholder="Ej: 123", key="numero_local")
+        poblacion = st.text_input("Población / sector", placeholder="Ej: Artificio, Boco, Pocochay", key="poblacion_local_widget")
+        calle = st.text_input("Calle", placeholder="Ej: Los Aromos", key="calle_local_widget")
+        numero = st.text_input("Número", placeholder="Ej: 123", key="numero_local_widget")
 
     else:
         st.markdown(
@@ -448,26 +448,26 @@ elif st.session_state.paso == 2:
             "Región",
             regiones,
             index=regiones.index("Valparaíso"),
-            key="region_otras",
+            key="region_otras_widget",
         )
 
         comuna = st.selectbox(
             "Comuna",
             REGIONES_COMUNAS[region],
-            key=f"comuna_otras_{region}",
+            key=f"comuna_otras_widget_{region}",
         )
 
-        poblacion = st.text_input("Población / sector", placeholder="Ej: sector o referencia", key="poblacion_otra")
-        calle = st.text_input("Calle", placeholder="Ej: Los Aromos", key="calle_otra")
-        numero = st.text_input("Número", placeholder="Ej: 123", key="numero_otra")
+        poblacion = st.text_input("Población / sector", placeholder="Ej: sector o referencia", key="poblacion_otra_widget")
+        calle = st.text_input("Calle", placeholder="Ej: Los Aromos", key="calle_otra_widget")
+        numero = st.text_input("Número", placeholder="Ej: 123", key="numero_otra_widget")
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Volver"):
+        if st.button("Volver", key="btn_volver_paso2"):
             cambiar_paso(1)
             st.rerun()
     with col2:
-        if st.button("Continuar"):
+        if st.button("Continuar", key="btn_paso2"):
             errores = []
 
             if modalidad_entrega != "Retiro sin costo":
@@ -500,8 +500,8 @@ elif st.session_state.paso == 2:
 elif st.session_state.paso == 3:
     st.subheader("Datos de contacto")
 
-    nombre = st.text_input("Nombre", placeholder="Tu nombre", key="nombre")
-    whatsapp = st.text_input("WhatsApp", placeholder="+56 9 1234 5678", key="whatsapp")
+    nombre = st.text_input("Nombre", placeholder="Tu nombre", key="nombre_widget")
+    whatsapp = st.text_input("WhatsApp", placeholder="+56 9 1234 5678", key="whatsapp_widget")
 
     st.markdown(
         f"""
@@ -517,11 +517,11 @@ elif st.session_state.paso == 3:
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Volver"):
+        if st.button("Volver", key="btn_volver_paso3"):
             cambiar_paso(2)
             st.rerun()
     with col2:
-        if st.button("Ver transferencia"):
+        if st.button("Ver transferencia", key="btn_paso3"):
             errores = []
             if not nombre.strip():
                 errores.append("Nombre")
@@ -550,7 +550,7 @@ elif st.session_state.paso == 4:
 
     if not datos_previos_ok:
         st.warning("Faltan datos del pedido. Vuelve al inicio para completar la solicitud.")
-        if st.button("Volver al paso 1"):
+        if st.button("Volver al paso 1", key="btn_reiniciar_incompleto"):
             cambiar_paso(1)
             st.rerun()
     else:
@@ -577,16 +577,16 @@ elif st.session_state.paso == 4:
         st.write(f"**Cliente:** {st.session_state.nombre}")
         st.write(f"**WhatsApp:** {st.session_state.whatsapp}")
 
-        confirmar = st.checkbox("Confirmo y quiero registrar esta solicitud.")
+        confirmar = st.checkbox("Confirmo y quiero registrar esta solicitud.", key="confirmar_registro_widget")
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Volver"):
+            if st.button("Volver", key="btn_volver_paso4"):
                 cambiar_paso(3)
                 st.rerun()
 
         with col2:
-            if st.button("Registrar"):
+            if st.button("Registrar", key="btn_registrar"):
                 if not confirmar:
                     st.error("Debes confirmar para registrar la solicitud.")
                 else:
@@ -620,6 +620,7 @@ elif st.session_state.paso == 4:
                         "Mensaje para WhatsApp",
                         value=mensaje_para_cliente(datos),
                         height=285,
+                        key="mensaje_whatsapp_final",
                     )
 
                     st.download_button(
@@ -627,9 +628,10 @@ elif st.session_state.paso == 4:
                         data=crear_cuerpo_correo(datos),
                         file_name=f"{folio}.txt",
                         mime="text/plain",
+                        key="descargar_solicitud_final",
                     )
 
-                    if st.button("Crear nueva solicitud"):
+                    if st.button("Crear nueva solicitud", key="btn_nueva_solicitud"):
                         for key in list(st.session_state.keys()):
                             del st.session_state[key]
                         st.session_state.paso = 1
@@ -643,6 +645,7 @@ with st.expander("Registro interno"):
                 data=archivo,
                 file_name="ordenes_paltas.csv",
                 mime="text/csv",
+                key="descargar_csv_interno",
             )
     else:
         st.caption("Aún no hay solicitudes registradas.")
