@@ -300,4 +300,3 @@ if ARCHIVO_ORDENES.exists():
         )
 else:
     st.caption("Aún no hay pedidos registrados.")
-
