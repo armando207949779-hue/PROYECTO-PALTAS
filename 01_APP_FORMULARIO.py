@@ -221,7 +221,7 @@ st.markdown(
     <style>
     .block-container {
         max-width: 520px;
-        padding-top: 0.65rem;
+        padding-top: 1.85rem;
         padding-left: 1rem;
         padding-right: 1rem;
         padding-bottom: 2rem;
@@ -230,7 +230,7 @@ st.markdown(
         display: flex;
         justify-content: center;
         align-items: center;
-        margin-top: 0.1rem;
+        margin-top: 0.85rem;
         margin-bottom: 0.2rem;
     }
     .main-title {
@@ -549,9 +549,29 @@ elif st.session_state.paso == 4:
     )
 
     if not datos_previos_ok:
-        st.warning("Faltan datos del pedido. Vuelve al inicio para completar la solicitud.")
-        if st.button("Volver al paso 1", key="btn_reiniciar_incompleto"):
-            cambiar_paso(1)
+        campos_necesarios = {
+            "tipo_palta": "Tipo de palta",
+            "kilos": "Cantidad de kilos",
+            "precio_kg": "Precio por kilo",
+            "total_paltas": "Total del pedido",
+            "modalidad_entrega": "Modalidad de entrega",
+            "nombre": "Nombre",
+            "whatsapp": "WhatsApp",
+        }
+        faltantes = [
+            nombre_campo
+            for clave, nombre_campo in campos_necesarios.items()
+            if clave not in st.session_state
+        ]
+
+        st.warning("Faltan datos para terminar la solicitud.")
+        st.write("Datos faltantes: **" + ", ".join(faltantes) + "**")
+        st.caption("Esto puede pasar si se actualiza la página, se abre directo el paso final o Streamlit reinicia la sesión.")
+
+        if st.button("Completar desde el inicio", key="btn_reiniciar_incompleto"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.session_state.paso = 1
             st.rerun()
     else:
         st.markdown(
@@ -636,16 +656,3 @@ elif st.session_state.paso == 4:
                             del st.session_state[key]
                         st.session_state.paso = 1
                         st.rerun()
-
-with st.expander("Registro interno"):
-    if ARCHIVO_ORDENES.exists():
-        with ARCHIVO_ORDENES.open("rb") as archivo:
-            st.download_button(
-                "Descargar solicitudes CSV",
-                data=archivo,
-                file_name="ordenes_paltas.csv",
-                mime="text/csv",
-                key="descargar_csv_interno",
-            )
-    else:
-        st.caption("Aún no hay solicitudes registradas.")
